@@ -557,113 +557,118 @@ function Encabezado({ sesion, onSalir }) {
 }
 
 /* ─────────────────────────  Ingreso  ───────────────────────── */
+
 function Ingreso({ usuarios, especialidades, onIngresar, onRegistrar }) {
-  const [id, setId] = useState("");
+  const [dni, setDni] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [alta, setAlta] = useState(null);
+  const [modoRegistro, setModoRegistro] = useState(false);
   const [nombre, setNombre] = useState("");
-  const [especialidad, setEspecialidad] = useState(especialidades[0] || "");
-  const [cargo, setCargo] = useState("medico");
 
-  const tipoDetectado = detectarTipo(id);
-  const hayAdmin = Object.values(usuarios).some((u) => u.cargo === "admin_general");
+  const procesarLogin = (e) => {
+    e.preventDefault();
+    const valor = dni.trim();
+    if (!valor) return setError("Ingresá tu DNI.");
+    if (!password) return setError("Ingresá tu contraseña.");
 
-  const continuar = () => {
-    const valor = id.trim().toUpperCase();
-    const tipo = detectarTipo(valor);
-    if (!tipo) return setError("Ingresá un DNI de 7 u 8 números, o tu número de legajo.");
-    setError("");
+    // Lógica de simulación de auth (hasta conectar Supabase Auth final)
     const existente = usuarios[valor];
     if (existente) {
-      if (existente.baja) return setError("Este número está dado de baja. Comunicate con la administración de la mutual.");
+      if (existente.baja) return setError("Usuario suspendido. Comunicate con MEBNA.");
       onIngresar({ id: valor, ...existente });
     } else {
-      setAlta({ id: valor, rol: tipo === "paciente" ? "paciente" : "staff" });
+      setError("DNI o contraseña incorrectos.");
     }
   };
 
-  const confirmarAlta = async () => {
-    if (nombre.trim().length < 3) return setError("Escribí tu nombre y apellido.");
-    const nuevo =
-      alta.rol === "paciente"
-        ? { id: alta.id, rol: "paciente", nombre: nombre.trim() }
-        : { id: alta.id, rol: "staff", nombre: nombre.trim(), cargo, especialidad: cargo === "medico" ? especialidad : null };
-    await onRegistrar({ ...usuarios, [alta.id]: nuevo }, nuevo);
+  const procesarRegistro = async (e) => {
+    e.preventDefault();
+    const valor = dni.trim();
+    if (nombre.trim().length < 3) return setError("Escribí tu nombre completo.");
+    if (!valor) return setError("Ingresá tu DNI.");
+    if (usuarios[valor]) return setError("Este DNI ya está registrado.");
+
+    const nuevo = { id: valor, rol: "paciente", nombre: nombre.trim() };
+    await onRegistrar({ ...usuarios, [valor]: nuevo }, nuevo);
     onIngresar(nuevo);
   };
 
-  if (alta) {
+  // Estilos basados en la imagen y los colores de la Mutual
+  const bgStyle = {
+    position: "fixed", inset: 0, zIndex: 100,
+    background: C.tealSoft, // Azul oscuro de fondo
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    fontFamily: SANS
+  };
+
+  const cardStyle = {
+    background: C.ink, // Azul principal para la tarjeta
+    padding: "45px 35px",
+    width: "100%", maxWidth: 320,
+    boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
+    textAlign: "center",
+    borderRadius: 2
+  };
+
+  const inputStyle = {
+    width: "100%", padding: "12px 14px", marginBottom: 16,
+    border: "none", boxSizing: "border-box", fontSize: 15,
+    fontFamily: SANS, outline: "none", color: "#333"
+  };
+
+  const btnStyle = {
+    width: "100%", padding: "12px", marginTop: 8,
+    background: C.amber, // Dorado MEBNA
+    color: C.tealSoft, border: "none", fontSize: 16,
+    fontWeight: 600, cursor: "pointer", fontFamily: SANS
+  };
+
+  const linkStyle = {
+    color: "#a9b4d4", fontSize: 13, textDecoration: "none",
+    display: "block", marginTop: 12, cursor: "pointer"
+  };
+
+  if (modoRegistro) {
     return (
-      <div style={{ maxWidth: 460, margin: "26px auto" }}>
-        <Tarjeta>
-          <h2 style={{ fontFamily: SERIF, fontSize: 24, margin: "0 0 6px" }}>Primera vez con este número</h2>
-          <p style={{ color: C.muted, fontSize: 14.5, margin: "0 0 20px", lineHeight: 1.5 }}>
-            {alta.rol === "paciente"
-              ? `Vamos a crear tu ficha de afiliado con el DNI ${alta.id}.`
-              : `Vamos a crear tu perfil de personal con el legajo ${alta.id}.`}
-          </p>
-          {error && <Aviso tipo="error">{error}</Aviso>}
-          <Campo etiqueta="Nombre y apellido">
-            <input style={estiloInput} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ana Beltrán" />
-          </Campo>
-          {alta.rol === "staff" && (
-            <>
-              <Campo
-                etiqueta="Función"
-                ayuda={hayAdmin ? "Las altas de personal las confirma la administración." : "Todavía no hay administrador general. El primero que se registre puede serlo."}
-              >
-                <select style={estiloInput} value={cargo} onChange={(e) => setCargo(e.target.value)}>
-                  <option value="medico">Profesional médico</option>
-                  <option value="administrativo">Administrativo</option>
-                  {!hayAdmin && <option value="admin_general">Administrador general</option>}
-                </select>
-              </Campo>
-              {cargo === "medico" && (
-                <Campo etiqueta="Especialidad">
-                  <select style={estiloInput} value={especialidad} onChange={(e) => setEspecialidad(e.target.value)}>
-                    {especialidades.map((e) => <option key={e}>{e}</option>)}
-                  </select>
-                </Campo>
-              )}
-            </>
-          )}
-          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-            <Boton onClick={confirmarAlta}>Crear y entrar</Boton>
-            <Boton variante="borde" onClick={() => { setAlta(null); setError(""); }}>Volver</Boton>
+      <div style={bgStyle}>
+        <div style={cardStyle}>
+          <h1 style={{ color: "#fff", fontSize: 32, margin: "0 0 30px", fontWeight: 400 }}>Registro</h1>
+          {error && <div style={{ color: C.amber, fontSize: 13, marginBottom: 15 }}>{error}</div>}
+          <form onSubmit={procesarRegistro}>
+            <input style={inputStyle} placeholder="Nombre y Apellido" value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus />
+            <input style={inputStyle} placeholder="DNI" value={dni} onChange={(e) => setDni(e.target.value)} />
+            <input style={inputStyle} type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <button type="submit" style={btnStyle}>Registrarse</button>
+          </form>
+          <div style={{ marginTop: 25 }}>
+            <span style={linkStyle} onClick={() => {setModoRegistro(false); setError("");}}>¿Ya tienes cuenta? Login</span>
           </div>
-        </Tarjeta>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 460, margin: "26px auto" }}>
-      <div style={{ marginBottom: 22 }}>
-        <h1 style={{ fontFamily: SERIF, fontSize: 32, lineHeight: 1.2, margin: "0 0 10px" }}>Entrá con tu número</h1>
-        <p style={{ color: C.muted, fontSize: 15, lineHeight: 1.55, margin: 0 }}>
-          Los afiliados ingresan con el DNI. El personal de la mutual, con el legajo.
-        </p>
+    <div style={bgStyle}>
+      <div style={cardStyle}>
+        <h1 style={{ color: "#fff", fontSize: 34, margin: "0 0 30px", fontWeight: 400 }}>Bienvenido</h1>
+        {error && <div style={{ color: C.amber, fontSize: 13, marginBottom: 15 }}>{error}</div>}
+        <form onSubmit={procesarLogin}>
+          <input style={inputStyle} placeholder="DNI" value={dni} onChange={(e) => setDni(e.target.value)} autoFocus />
+          <input style={inputStyle} type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <button type="submit" style={btnStyle}>Login</button>
+        </form>
+        <div style={{ marginTop: 25 }}>
+          <span style={linkStyle}>¿Perdiste tu contraseña?</span>
+          <span style={linkStyle} onClick={() => {setModoRegistro(true); setError("");}}>¿No tienes Cuenta? Registrate</span>
+        </div>
       </div>
-      <Tarjeta>
-        {error && <Aviso tipo="error">{error}</Aviso>}
-        <Campo
-          etiqueta="DNI o legajo"
-          ayuda={
-            tipoDetectado === "paciente"
-              ? "Reconocido como DNI: entrás como afiliado."
-              : tipoDetectado === "staff"
-              ? "Reconocido como legajo: entrás como personal de la mutual."
-              : "Ejemplos: 30124588 (DNI) o L-2204 (legajo)."
-          }
-        >
-          <input style={estiloInput} value={id} onChange={(e) => setId(e.target.value)} onKeyDown={(e) => e.key === "Enter" && continuar()} placeholder="30124588" autoFocus />
-        </Campo>
-        <Boton ancho onClick={continuar}>Continuar</Boton>
-      </Tarjeta>
+      <div style={{ marginTop: 20 }}>
+         <span style={{ color: "#fff", fontSize: 14, cursor: "pointer" }}>Volver</span>
+      </div>
     </div>
   );
 }
-
 /* ─────────────────────────  Panel del paciente  ───────────────────────── */
 function PanelPaciente({ sesion, turnos, guardarTurnos, especialidades, usuarios, abrirVisor }) {
   const [vista, setVista] = useState("mis");

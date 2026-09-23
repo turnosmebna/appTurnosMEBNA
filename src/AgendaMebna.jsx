@@ -9,15 +9,15 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* ─────────────────────────  Paleta y tipografía  ───────────────────────── */
 const C = {
-  ink: "#10302E",
-  teal: "#1F6F63",
-  tealSoft: "#3E9384",
-  mint: "#DDEDE7",
-  paper: "#F6F8F6",
-  line: "#C9D8D2",
-  amber: "#B9761A",
-  clay: "#9E3629",
-  muted: "#5E7370",
+  ink: "#1e2a78",       // Azul principal MEBNA
+  teal: "#1e2a78",      // Usamos el azul institucional como color primario de acción
+  tealSoft: "#18154a",  // Azul oscuro (para hovers)
+  mint: "#e2e2ec",      // Fondo institucional gris/celeste
+  paper: "#ffffff",     // Blanco puro para las tarjetas
+  line: "#c8cbdf",      // Bordes suaves
+  amber: "#c99700",     // Dorado MEBNA para botones de destaque
+  clay: "#9E3629",      // Rojo para cancelar/errores
+  muted: "#5b6590",     // Texto secundario
 };
 const SANS = "'Inter', sans-serif";
 const SERIF = "'Playfair Display', serif";

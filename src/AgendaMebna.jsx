@@ -19,8 +19,8 @@ const C = {
   clay: "#9E3629",
   muted: "#5E7370",
 };
-const SANS = "'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
-const SERIF = "'Iowan Old Style', 'Palatino Linotype', Georgia, serif";
+const SANS = "'Inter', sans-serif";
+const SERIF = "'Playfair Display', serif";
 
 const ESPECIALIDADES_INICIALES = [
   "Clínica médica",

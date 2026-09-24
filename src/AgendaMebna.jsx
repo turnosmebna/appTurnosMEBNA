@@ -1,36 +1,30 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-/* 👇 REEMPLAZAR CON TUS DATOS DE SUPABASE 👇 */
-const SUPABASE_URL = "https://bcswujldqkkbtuznpxvb.supabase.co/rest/v1/";
-const SUPABASE_KEY = "sb_publishable_BeZ68EJrIPer6aLVUOWXJQ_TgrffS8r";
+/* 👇 CONEXIÓN A SUPABASE 👇 */
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://bcswujldqkkbtuznpxvb.supabase.co";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_BeZ68EJrIPer6aLVUOWXJQ_TgrffS8r";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 /* 👆 =================================== 👆 */
 
 /* ─────────────────────────  Paleta y tipografía  ───────────────────────── */
 const C = {
-  ink: "#1e2a78",       // Azul principal MEBNA
-  teal: "#1e2a78",      // Usamos el azul institucional como color primario de acción
-  tealSoft: "#18154a",  // Azul oscuro (para hovers)
-  mint: "#e2e2ec",      // Fondo institucional gris/celeste
-  paper: "#ffffff",     // Blanco puro para las tarjetas
-  line: "#c8cbdf",      // Bordes suaves
-  amber: "#c99700",     // Dorado MEBNA para botones de destaque
-  clay: "#9E3629",      // Rojo para cancelar/errores
-  muted: "#5b6590",     // Texto secundario
+  ink: "#1e2a78",       
+  teal: "#1e2a78",      
+  tealSoft: "#18154a",  
+  mint: "#e2e2ec",      
+  paper: "#ffffff",     
+  line: "#c8cbdf",      
+  amber: "#c99700",     
+  clay: "#9E3629",      
+  muted: "#5b6590",     
 };
 const SANS = "'Inter', sans-serif";
 const SERIF = "'Playfair Display', serif";
 
 const ESPECIALIDADES_INICIALES = [
-  "Clínica médica",
-  "Cardiología",
-  "Pediatría",
-  "Traumatología",
-  "Ginecología",
-  "Oftalmología",
-  "Kinesiología",
-  "Laboratorio",
+  "Clínica médica", "Cardiología", "Pediatría", "Traumatología", 
+  "Ginecología", "Oftalmología", "Kinesiología", "Laboratorio",
 ];
 
 const DIAS = [
@@ -436,11 +430,39 @@ export default function AgendaMEBNA() {
   const [visor, setVisor] = useState(null);
   const [fallaStorage, setFallaStorage] = useState(false);
 
-  // Carga inicial desde Supabase
+  // Escuchar cambios de sesión de Supabase Auth
+  useEffect(() => {
+    const cargarDatos = async (usuarioAuth) => {
+      // El ID local es el DNI o Legajo (extraído del correo virtual)
+      const localId = usuarioAuth.email.split('@')[0].toUpperCase();
+      const { data, error } = await supabase.from('usuarios').select('*').eq('id', localId).single();
+      
+      if (data && !data.baja) {
+        setSesion(data);
+      } else if (data?.baja) {
+        await supabase.auth.signOut();
+        setSesion(null);
+        alert("El usuario se encuentra dado de baja.");
+      }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) cargarDatos(session.user);
+      else setSesion(null);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) cargarDatos(session.user);
+      else setSesion(null);
+    });
+
+    return () => authListener.subscription.unsubscribe();
+  }, []);
+
+  // Carga inicial desde BD
   useEffect(() => {
     (async () => {
       try {
-        // 1. Cargar Usuarios
         const { data: dataUsuarios } = await supabase.from('usuarios').select('*');
         if (dataUsuarios) {
           const mapUsr = {};
@@ -448,11 +470,9 @@ export default function AgendaMEBNA() {
           setUsuarios(mapUsr);
         }
         
-        // 2. Cargar Especialidades
         const { data: dataEsp } = await supabase.from('especialidades').select('*');
         if (dataEsp && dataEsp.length > 0) setEspecialidades(dataEsp.map(e => e.nombre));
         
-        // 3. Cargar Turnos
         const { data: dataTurnos } = await supabase.from('turnos').select('*');
         if (dataTurnos) setTurnos(dataTurnos);
 
@@ -464,7 +484,6 @@ export default function AgendaMEBNA() {
     })();
   }, []);
 
-  // Adaptadores para guardar en Supabase 
   const guardarTurnos = useCallback(async (lista, turnoModificado = null, idBorrar = null) => {
     setTurnos(lista);
     try {
@@ -504,6 +523,10 @@ export default function AgendaMEBNA() {
     }
   }, []);
 
+  const cerrarSesion = async () => {
+    await supabase.auth.signOut();
+  };
+
   if (cargandoApp) {
     return (
       <div style={{ fontFamily: SANS, background: C.paper, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: C.muted }}>
@@ -516,11 +539,12 @@ export default function AgendaMEBNA() {
 
   return (
     <div style={{ fontFamily: SANS, background: C.paper, minHeight: "100vh", color: C.ink }}>
-      <Encabezado sesion={sesion} onSalir={() => setSesion(null)} />
+      <Encabezado sesion={sesion} onSalir={cerrarSesion} />
       <main style={{ maxWidth: 940, margin: "0 auto", padding: "26px 18px 70px" }}>
-        {fallaStorage && <Aviso tipo="error">No se pudieron guardar o sincronizar los últimos cambios. Revisá tu conexión de internet.</Aviso>}
+        {fallaStorage && <Aviso tipo="error">No se pudieron sincronizar los últimos cambios. Revisá tu conexión de internet.</Aviso>}
+        
         {!sesion ? (
-          <Ingreso usuarios={usuarios} especialidades={especialidades} onIngresar={setSesion} onRegistrar={guardarUsuarios} />
+          <Ingreso />
         ) : sesion.rol === "paciente" ? (
           <PanelPaciente sesion={sesion} {...comun} />
         ) : (
@@ -556,119 +580,275 @@ function Encabezado({ sesion, onSalir }) {
   );
 }
 
-/* ─────────────────────────  Ingreso  ───────────────────────── */
+/* ─────────────────────────  Ingreso Condicional (ETAPA 2) ───────────────────────── */
 
-function Ingreso({ usuarios, especialidades, onIngresar, onRegistrar }) {
-  const [dni, setDni] = useState("");
+function Ingreso() {
+  const [paso, setPaso] = useState("ID"); // 'ID', 'PASSWORD', 'DOB', 'CONFIRMAR', 'REGISTRO'
+  const [identificador, setIdentificador] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [modoRegistro, setModoRegistro] = useState(false);
+  const [dob, setDob] = useState("");
   const [nombre, setNombre] = useState("");
+  const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [tempUser, setTempUser] = useState(null); // Perfil temporal antes de confirmar
 
-  const procesarLogin = (e) => {
-    e.preventDefault();
-    const valor = dni.trim();
-    if (!valor) return setError("Ingresá tu DNI.");
-    if (!password) return setError("Ingresá tu contraseña.");
-
-    // Lógica de simulación de auth (hasta conectar Supabase Auth final)
-    const existente = usuarios[valor];
-    if (existente) {
-      if (existente.baja) return setError("Usuario suspendido. Comunicate con MEBNA.");
-      onIngresar({ id: valor, ...existente });
-    } else {
-      setError("DNI o contraseña incorrectos.");
-    }
-  };
-
-  const procesarRegistro = async (e) => {
-    e.preventDefault();
-    const valor = dni.trim();
-    if (nombre.trim().length < 3) return setError("Escribí tu nombre completo.");
-    if (!valor) return setError("Ingresá tu DNI.");
-    if (usuarios[valor]) return setError("Este DNI ya está registrado.");
-
-    const nuevo = { id: valor, rol: "paciente", nombre: nombre.trim() };
-    await onRegistrar({ ...usuarios, [valor]: nuevo }, nuevo);
-    onIngresar(nuevo);
-  };
-
-  // Estilos basados en la imagen y los colores de la Mutual
+  // Estilos base
   const bgStyle = {
     position: "fixed", inset: 0, zIndex: 100,
-    background: C.tealSoft, // Azul oscuro de fondo
+    background: C.tealSoft,
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
     fontFamily: SANS
   };
 
   const cardStyle = {
-    background: C.ink, // Azul principal para la tarjeta
+    background: C.ink,
     padding: "45px 35px",
-    width: "100%", maxWidth: 320,
+    width: "100%", maxWidth: 340,
     boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
     textAlign: "center",
-    borderRadius: 2
+    borderRadius: 8
   };
 
   const inputStyle = {
     width: "100%", padding: "12px 14px", marginBottom: 16,
     border: "none", boxSizing: "border-box", fontSize: 15,
-    fontFamily: SANS, outline: "none", color: "#333"
+    borderRadius: 6, fontFamily: SANS, outline: "none", color: "#333"
   };
 
   const btnStyle = {
     width: "100%", padding: "12px", marginTop: 8,
-    background: C.amber, // Dorado MEBNA
+    background: C.amber,
     color: C.tealSoft, border: "none", fontSize: 16,
-    fontWeight: 600, cursor: "pointer", fontFamily: SANS
+    borderRadius: 6, fontWeight: 600, cursor: "pointer", fontFamily: SANS
   };
 
   const linkStyle = {
     color: "#a9b4d4", fontSize: 13, textDecoration: "none",
-    display: "block", marginTop: 12, cursor: "pointer"
+    display: "block", marginTop: 16, cursor: "pointer"
   };
 
-  if (modoRegistro) {
+  // 1. Detección de Identificador
+  const procesarId = (e) => {
+    e.preventDefault();
+    const val = identificador.trim().toUpperCase();
+    if (!val) return setError("Por favor, ingresá un identificador.");
+    
+    const tipo = detectarTipo(val);
+    if (!tipo) return setError("Formato inválido. Usá tu DNI (solo números) o tu Legajo (ej. L-123).");
+
+    setError("");
+    if (tipo === "staff") {
+      setPaso("PASSWORD");
+    } else {
+      setPaso("DOB");
+    }
+  };
+
+  // 2A. Ingreso Personal (Contraseña real)
+  const procesarLoginStaff = async (e) => {
+    e.preventDefault();
+    if (!password) return setError("Ingresá tu contraseña.");
+    
+    setCargando(true); setError("");
+    const email = `${identificador.toLowerCase()}@staff.mebna.ar`; // Email virtual
+    
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    
+    if (err) {
+      setError("Legajo o contraseña incorrectos, o usuario sin acceso.");
+      setCargando(false);
+    }
+    // Si tiene éxito, el listener de AgendaMEBNA actualiza la sesión y desmonta esta pantalla.
+  };
+
+  // 2B. Ingreso Paciente (DNI + Fecha de Nacimiento)
+  const procesarLoginPaciente = async (e) => {
+    e.preventDefault();
+    if (!dob) return setError("Ingresá tu fecha de nacimiento.");
+    
+    setCargando(true); setError("");
+    const email = `${identificador}@paciente.mebna.ar`; // Email virtual
+    
+    const { data: authData, error: errAuth } = await supabase.auth.signInWithPassword({ 
+      email, 
+      password: dob // Usamos el DOB como password para cumplir la regla
+    });
+
+    if (errAuth) {
+      setError("Datos incorrectos. Si sos afiliado nuevo, registrate primero.");
+      setCargando(false);
+      return;
+    }
+
+    // Buscamos el nombre para la pantalla de confirmación
+    const { data: perfil } = await supabase.from('usuarios').select('nombre').eq('id', identificador).single();
+    
+    setTempUser(perfil ? perfil.nombre : "Afiliado");
+    setPaso("CONFIRMAR");
+    setCargando(false);
+  };
+
+  // 2C. Registro Paciente
+  const procesarRegistro = async (e) => {
+    e.preventDefault();
+    if (nombre.trim().length < 3) return setError("Ingresá tu nombre completo.");
+    if (!identificador) return setError("Ingresá tu DNI.");
+    if (!dob) return setError("Elegí tu fecha de nacimiento.");
+
+    setCargando(true); setError("");
+    const email = `${identificador}@paciente.mebna.ar`;
+    
+    const { error: errSignUp } = await supabase.auth.signUp({
+      email,
+      password: dob, // DOB como password
+      options: {
+        data: {
+          nombre: nombre.trim(),
+          rol: 'paciente',
+          id_mebna: identificador,
+          fecha_nacimiento: dob
+        }
+      }
+    });
+
+    if (errSignUp) {
+      if(errSignUp.message.includes('already registered')) {
+        setError("Este DNI ya está registrado. Ingresá desde la pantalla principal.");
+      } else {
+        setError("Ocurrió un error al registrar. Intentá nuevamente.");
+      }
+      setCargando(false);
+      return;
+    }
+
+    // Al registrar, el trigger SQL crea el perfil y la sesión arranca sola
+    setCargando(false);
+  };
+
+  const cancelarConfirmacion = async () => {
+    await supabase.auth.signOut();
+    setPaso("ID");
+    setIdentificador("");
+    setDob("");
+    setTempUser(null);
+  };
+
+  // VISTAS SEGÚN EL PASO
+
+  if (paso === "REGISTRO") {
     return (
       <div style={bgStyle}>
         <div style={cardStyle}>
-          <h1 style={{ color: "#fff", fontSize: 32, margin: "0 0 30px", fontWeight: 400 }}>Registro</h1>
+          <h1 style={{ color: "#fff", fontSize: 26, margin: "0 0 10px", fontWeight: 400 }}>Nuevo Afiliado</h1>
+          <p style={{ color: C.line, fontSize: 14, margin: "0 0 25px" }}>Registrate para pedir turnos</p>
+          
           {error && <div style={{ color: C.amber, fontSize: 13, marginBottom: 15 }}>{error}</div>}
+          
           <form onSubmit={procesarRegistro}>
             <input style={inputStyle} placeholder="Nombre y Apellido" value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus />
-            <input style={inputStyle} placeholder="DNI" value={dni} onChange={(e) => setDni(e.target.value)} />
-            <input style={inputStyle} type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <button type="submit" style={btnStyle}>Registrarse</button>
+            <input style={inputStyle} placeholder="Nº de DNI (sin puntos)" value={identificador} onChange={(e) => setIdentificador(e.target.value)} />
+            <label style={{ display: "block", textAlign: "left", color: "#fff", fontSize: 13, marginBottom: 5 }}>Fecha de nacimiento</label>
+            <input style={inputStyle} type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+            
+            <button type="submit" style={btnStyle} disabled={cargando}>
+              {cargando ? "Registrando..." : "Crear mi cuenta"}
+            </button>
           </form>
-          <div style={{ marginTop: 25 }}>
-            <span style={linkStyle} onClick={() => {setModoRegistro(false); setError("");}}>¿Ya tienes cuenta? Login</span>
-          </div>
+          <span style={linkStyle} onClick={() => { setPaso("ID"); setError(""); setIdentificador(""); setDob(""); }}>Ya tengo cuenta. Volver al inicio</span>
         </div>
       </div>
     );
   }
 
+  if (paso === "CONFIRMAR") {
+    return (
+      <div style={bgStyle}>
+        <div style={{...cardStyle, background: "#fff"}}>
+          <h1 style={{ color: C.ink, fontSize: 22, margin: "0 0 20px", fontFamily: SERIF }}>¿Sos vos?</h1>
+          <div style={{ background: C.mint, padding: "15px", borderRadius: 8, marginBottom: 20 }}>
+            <strong style={{ fontSize: 18, color: C.ink, display: "block" }}>{tempUser}</strong>
+            <span style={{ fontSize: 14, color: C.muted }}>DNI: {identificador}</span>
+          </div>
+          
+          <button style={btnStyle} onClick={() => window.location.reload()}>Sí, entrar a mi cuenta</button>
+          <button style={{...btnStyle, background: "transparent", color: C.clay, border: `1px solid ${C.clay}`, marginTop: 12}} onClick={cancelarConfirmacion}>
+            No, me equivoqué de DNI
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (paso === "PASSWORD") {
+    return (
+      <div style={bgStyle}>
+        <div style={cardStyle}>
+          <h1 style={{ color: "#fff", fontSize: 26, margin: "0 0 10px", fontWeight: 400 }}>Acceso Personal</h1>
+          <p style={{ color: C.line, fontSize: 14, margin: "0 0 25px" }}>Legajo: {identificador.toUpperCase()}</p>
+          
+          {error && <div style={{ color: C.amber, fontSize: 13, marginBottom: 15 }}>{error}</div>}
+          
+          <form onSubmit={procesarLoginStaff}>
+            <input style={inputStyle} type="password" placeholder="Tu contraseña" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
+            <button type="submit" style={btnStyle} disabled={cargando}>
+              {cargando ? "Validando..." : "Ingresar"}
+            </button>
+          </form>
+          <span style={linkStyle} onClick={() => { setPaso("ID"); setError(""); setPassword(""); }}>Cambiar identificador</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (paso === "DOB") {
+    return (
+      <div style={bgStyle}>
+        <div style={cardStyle}>
+          <h1 style={{ color: "#fff", fontSize: 26, margin: "0 0 10px", fontWeight: 400 }}>Validación</h1>
+          <p style={{ color: C.line, fontSize: 14, margin: "0 0 25px" }}>DNI: {identificador}</p>
+          
+          {error && <div style={{ color: C.amber, fontSize: 13, marginBottom: 15 }}>{error}</div>}
+          
+          <form onSubmit={procesarLoginPaciente}>
+            <label style={{ display: "block", textAlign: "left", color: "#fff", fontSize: 13, marginBottom: 5 }}>Tu fecha de nacimiento</label>
+            <input style={inputStyle} type="date" value={dob} onChange={(e) => setDob(e.target.value)} autoFocus />
+            <button type="submit" style={btnStyle} disabled={cargando}>
+              {cargando ? "Buscando..." : "Siguiente"}
+            </button>
+          </form>
+          <span style={linkStyle} onClick={() => { setPaso("ID"); setError(""); setDob(""); }}>Cambiar DNI</span>
+        </div>
+      </div>
+    );
+  }
+
+  // PASO INICIAL (ID)
   return (
     <div style={bgStyle}>
       <div style={cardStyle}>
-        <h1 style={{ color: "#fff", fontSize: 34, margin: "0 0 30px", fontWeight: 400 }}>Bienvenido</h1>
+        <h1 style={{ color: "#fff", fontSize: 34, margin: "0 0 8px", fontFamily: SERIF }}>MEBNA</h1>
+        <p style={{ color: C.line, fontSize: 15, margin: "0 0 30px" }}>Portal de Turnos Web</p>
+        
         {error && <div style={{ color: C.amber, fontSize: 13, marginBottom: 15 }}>{error}</div>}
-        <form onSubmit={procesarLogin}>
-          <input style={inputStyle} placeholder="DNI" value={dni} onChange={(e) => setDni(e.target.value)} autoFocus />
-          <input style={inputStyle} type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <button type="submit" style={btnStyle}>Login</button>
+        
+        <form onSubmit={procesarId}>
+          <input 
+            style={{...inputStyle, textAlign: "center", fontSize: 18, letterSpacing: 1}} 
+            placeholder="DNI o Legajo" 
+            value={identificador} 
+            onChange={(e) => setIdentificador(e.target.value)} 
+            autoFocus 
+          />
+          <button type="submit" style={btnStyle}>Continuar</button>
         </form>
         <div style={{ marginTop: 25 }}>
-          <span style={linkStyle}>¿Perdiste tu contraseña?</span>
-          <span style={linkStyle} onClick={() => {setModoRegistro(true); setError("");}}>¿No tienes Cuenta? Registrate</span>
+          <span style={linkStyle} onClick={() => { setPaso("REGISTRO"); setError(""); setIdentificador(""); }}>¿Sos afiliado nuevo? Registrate acá</span>
         </div>
-      </div>
-      <div style={{ marginTop: 20 }}>
-         <span style={{ color: "#fff", fontSize: 14, cursor: "pointer" }}>Volver</span>
       </div>
     </div>
   );
 }
+
 /* ─────────────────────────  Panel del paciente  ───────────────────────── */
 function PanelPaciente({ sesion, turnos, guardarTurnos, especialidades, usuarios, abrirVisor }) {
   const [vista, setVista] = useState("mis");
@@ -731,7 +911,6 @@ function FormularioTurno({ sesion, turnos, guardarTurnos, especialidades, usuari
     const idTurno = "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     
     try {
-      // Subir fotos a Supabase Storage (convertimos base64 a Blob)
       const subirFoto = async (b64, sufijo) => {
         if(!b64) return;
         const fetchRes = await fetch(b64);
@@ -819,7 +998,7 @@ function FormularioTurno({ sesion, turnos, guardarTurnos, especialidades, usuari
 function ListaPaciente({ turnos, sesion, guardarTurnos, todos, abrirVisor, irANuevo }) {
   const verFoto = async (t, cual, titulo) => {
     const fileName = `${t.id}_${cual === 'docDni' ? 'dni' : 'orden'}.jpg`;
-    const { data, error } = await supabase.storage.from('mebna_img').createSignedUrl(fileName, 60); // 60 segundos
+    const { data, error } = await supabase.storage.from('mebna_img').createSignedUrl(fileName, 60); 
     if(data && !error) abrirVisor({ src: data.signedUrl, titulo });
     else abrirVisor({ src: null, titulo });
   };
